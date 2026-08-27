@@ -1,0 +1,15 @@
+[package]
+name = "rt"
+version = "0.1.0"
+edition = "2021"
+description = "A CPU ray tracer producing PPM images: spheres, cubes, planes, cylinders, shadows, reflection and refraction."
+
+# Deliberately zero external dependencies: pure std (including std::thread::scope
+# for parallel rendering), so the project builds fully offline with `cargo build`.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
