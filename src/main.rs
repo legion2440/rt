@@ -142,7 +142,11 @@ fn parse_args() -> Result<Option<Config>, String> {
 /// Render the whole image, splitting rows across `threads` worker threads.
 fn render(scene: &Scene, opts: &RenderOptions, width: usize, height: usize, threads: usize) -> Vec<Color> {
     let mut pixels = vec![Color::black(); width * height];
-    let chunk_rows = height.div_ceil(threads).max(1);
+    let mut chunk_rows = height / threads;
+    if height % threads != 0 {
+        chunk_rows += 1;
+    }
+    let chunk_rows = chunk_rows.max(1);
 
     std::thread::scope(|s| {
         for (chunk_idx, chunk) in pixels.chunks_mut(width * chunk_rows).enumerate() {
