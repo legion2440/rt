@@ -45,7 +45,9 @@ impl Default for Config {
             refract: false,
             texture: false,
             brightness: 1.0,
-            threads: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4),
+            threads: std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4),
             camera: None,
             look_at: None,
             fov: None,
@@ -60,7 +62,10 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
     let mut v = [0.0f64; 3];
     for (i, p) in parts.iter().enumerate() {
-        v[i] = p.trim().parse().map_err(|_| format!("invalid number \"{p}\" in \"{s}\""))?;
+        v[i] = p
+            .trim()
+            .parse()
+            .map_err(|_| format!("invalid number \"{p}\" in \"{s}\""))?;
     }
     Ok(Vec3::new(v[0], v[1], v[2]))
 }
@@ -105,7 +110,8 @@ fn parse_args() -> Result<Option<Config>, String> {
     while let Some(arg) = args.next() {
         macro_rules! next_val {
             () => {
-                args.next().ok_or_else(|| format!("missing value for {arg}"))?
+                args.next()
+                    .ok_or_else(|| format!("missing value for {arg}"))?
             };
         }
         match arg.as_str() {
@@ -117,7 +123,9 @@ fn parse_args() -> Result<Option<Config>, String> {
             "--reflect" => cfg.reflect = true,
             "--refract" => cfg.refract = true,
             "--texture" => cfg.texture = true,
-            "--brightness" => cfg.brightness = next_val!().parse().map_err(|_| "invalid --brightness")?,
+            "--brightness" => {
+                cfg.brightness = next_val!().parse().map_err(|_| "invalid --brightness")?
+            }
             "--camera" => cfg.camera = Some(parse_vec3(&next_val!())?),
             "--look-at" => cfg.look_at = Some(parse_vec3(&next_val!())?),
             "--fov" => cfg.fov = Some(next_val!().parse().map_err(|_| "invalid --fov")?),
@@ -140,7 +148,13 @@ fn parse_args() -> Result<Option<Config>, String> {
 }
 
 /// Render the whole image, splitting rows across `threads` worker threads.
-fn render(scene: &Scene, opts: &RenderOptions, width: usize, height: usize, threads: usize) -> Vec<Color> {
+fn render(
+    scene: &Scene,
+    opts: &RenderOptions,
+    width: usize,
+    height: usize,
+    threads: usize,
+) -> Vec<Color> {
     let mut pixels = vec![Color::black(); width * height];
     let mut chunk_rows = height / threads;
     if height % threads != 0 {

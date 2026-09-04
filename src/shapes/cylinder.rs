@@ -24,7 +24,14 @@ impl Cylinder {
         }
     }
 
-    fn cap_hit(&self, ray: &Ray, t_min: f64, t_max: f64, center: Vec3, outward_normal: Vec3) -> Option<f64> {
+    fn cap_hit(
+        &self,
+        ray: &Ray,
+        t_min: f64,
+        t_max: f64,
+        center: Vec3,
+        outward_normal: Vec3,
+    ) -> Option<f64> {
         let denom = outward_normal.dot(&ray.direction);
         if denom.abs() < 1e-9 {
             return None;

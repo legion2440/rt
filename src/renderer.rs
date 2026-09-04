@@ -77,7 +77,10 @@ pub fn trace(scene: &Scene, ray: &Ray, opts: &RenderOptions, depth: u32) -> Colo
         if hit.material.specular > 0.0 {
             let reflected = (-light_dir).reflect(&hit.normal);
             let view_dir = -ray.direction;
-            let spec = reflected.dot(&view_dir).max(0.0).powf(hit.material.shininess);
+            let spec = reflected
+                .dot(&view_dir)
+                .max(0.0)
+                .powf(hit.material.shininess);
             if spec > 0.0 {
                 color += light.color * (hit.material.specular * spec * intensity);
             }
@@ -89,7 +92,8 @@ pub fn trace(scene: &Scene, ray: &Ray, opts: &RenderOptions, depth: u32) -> Colo
         let reflect_dir = ray.direction.reflect(&hit.normal);
         let reflect_ray = Ray::new(hit.point + hit.normal * SHADOW_BIAS, reflect_dir);
         let reflected_color = trace(scene, &reflect_ray, opts, depth - 1);
-        color = color * (1.0 - hit.material.reflectivity) + reflected_color * hit.material.reflectivity;
+        color =
+            color * (1.0 - hit.material.reflectivity) + reflected_color * hit.material.reflectivity;
     }
 
     // Bonus: refraction.
@@ -113,7 +117,8 @@ pub fn trace(scene: &Scene, ray: &Ray, opts: &RenderOptions, depth: u32) -> Colo
                 trace(scene, &reflect_ray, opts, depth - 1)
             }
         };
-        color = color * (1.0 - hit.material.transparency) + refracted_color * hit.material.transparency;
+        color =
+            color * (1.0 - hit.material.transparency) + refracted_color * hit.material.transparency;
     }
 
     color

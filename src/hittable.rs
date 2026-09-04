@@ -32,6 +32,10 @@ pub trait Hittable: Send + Sync {
 /// point away from the object (not pre-flipped).
 pub fn face_normal(ray_dir: &Vec3, outward_normal: Vec3) -> (Vec3, bool) {
     let front_face = ray_dir.dot(&outward_normal) < 0.0;
-    let normal = if front_face { outward_normal } else { -outward_normal };
+    let normal = if front_face {
+        outward_normal
+    } else {
+        -outward_normal
+    };
     (normal, front_face)
 }

@@ -90,7 +90,8 @@ impl Material {
             Texture::Solid(c) => c,
             Texture::Checker(c1, c2, scale) => {
                 let s = 1.0 / scale;
-                let sum = (p.x * s).floor() as i64 + (p.y * s).floor() as i64 + (p.z * s).floor() as i64;
+                let sum =
+                    (p.x * s).floor() as i64 + (p.y * s).floor() as i64 + (p.z * s).floor() as i64;
                 if sum.rem_euclid(2) == 0 {
                     c1
                 } else {

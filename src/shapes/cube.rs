@@ -112,11 +112,7 @@ mod tests {
 
     #[test]
     fn ray_starting_inside_hits_exit_face() {
-        let cube = Cube::new(
-            Vec3::ZERO,
-            2.0,
-            Material::new(Color::new(0.2, 0.3, 0.4)),
-        );
+        let cube = Cube::new(Vec3::ZERO, 2.0, Material::new(Color::new(0.2, 0.3, 0.4)));
         let ray = Ray::new(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0));
 
         let hit = cube.hit(&ray, 1e-4, f64::INFINITY).expect("exit face");

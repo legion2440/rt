@@ -90,13 +90,7 @@ mod tests {
 
     #[test]
     fn coincident_position_and_target_still_produce_a_ray() {
-        let camera = Camera::new(
-            Vec3::ZERO,
-            Vec3::ZERO,
-            Vec3::new(0.0, 1.0, 0.0),
-            60.0,
-            1.0,
-        );
+        let camera = Camera::new(Vec3::ZERO, Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0), 60.0, 1.0);
 
         let ray = camera.get_ray(0.5, 0.5);
         assert!(ray.direction.length_squared() > 0.99);

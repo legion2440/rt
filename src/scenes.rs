@@ -31,11 +31,7 @@ fn ground_material() -> Material {
 }
 
 fn soft_fill_light() -> Light {
-    Light::new(
-        Vec3::new(-3.0, 3.0, 5.0),
-        Color::new(0.9, 0.9, 1.0),
-        0.3,
-    )
+    Light::new(Vec3::new(-3.0, 3.0, 5.0), Color::new(0.9, 0.9, 1.0), 0.3)
 }
 
 /// Build one of the 4 numbered demo scenes. `aspect_ratio` = width/height of
@@ -50,7 +46,13 @@ pub fn build(preset: u32, aspect_ratio: f64, camera_override: Option<CameraParam
         other => panic!("unknown --scene {other}, expected 1, 2, 3 or 4"),
     };
     let cam = camera_override.unwrap_or(default_cam);
-    scene.camera = Camera::new(cam.position, cam.look_at, Vec3::new(0.0, 1.0, 0.0), cam.fov, aspect_ratio);
+    scene.camera = Camera::new(
+        cam.position,
+        cam.look_at,
+        Vec3::new(0.0, 1.0, 0.0),
+        cam.fov,
+        aspect_ratio,
+    );
     scene
 }
 
@@ -63,9 +65,19 @@ fn scene_sphere() -> (Scene, CameraParams) {
         fov: 55.0,
     };
     // Camera/aspect get replaced in `build`; pass a placeholder here.
-    let mut scene = Scene::new(Camera::new(cam.position, cam.look_at, Vec3::new(0.0, 1.0, 0.0), cam.fov, 1.0));
+    let mut scene = Scene::new(Camera::new(
+        cam.position,
+        cam.look_at,
+        Vec3::new(0.0, 1.0, 0.0),
+        cam.fov,
+        1.0,
+    ));
 
-    scene.add(Plane::new(Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0), ground_material()));
+    scene.add(Plane::new(
+        Vec3::ZERO,
+        Vec3::new(0.0, 1.0, 0.0),
+        ground_material(),
+    ));
 
     scene.add(Sphere::new(
         Vec3::new(0.0, 1.0, 0.0),
@@ -91,9 +103,19 @@ fn scene_plane_and_cube() -> (Scene, CameraParams) {
         look_at: Vec3::new(0.0, 1.0, 0.0),
         fov: 55.0,
     };
-    let mut scene = Scene::new(Camera::new(cam.position, cam.look_at, Vec3::new(0.0, 1.0, 0.0), cam.fov, 1.0));
+    let mut scene = Scene::new(Camera::new(
+        cam.position,
+        cam.look_at,
+        Vec3::new(0.0, 1.0, 0.0),
+        cam.fov,
+        1.0,
+    ));
 
-    scene.add(Plane::new(Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0), ground_material()));
+    scene.add(Plane::new(
+        Vec3::ZERO,
+        Vec3::new(0.0, 1.0, 0.0),
+        ground_material(),
+    ));
 
     scene.add(Cube::new(
         Vec3::new(0.0, 0.9, 0.0),
@@ -132,9 +154,19 @@ fn default_camera_4() -> CameraParams {
 /// Scene 3/4: at least one of every required primitive. The extra glass
 /// sphere demonstrates the refraction bonus in the same render.
 fn scene_all_objects(cam: CameraParams) -> (Scene, CameraParams) {
-    let mut scene = Scene::new(Camera::new(cam.position, cam.look_at, Vec3::new(0.0, 1.0, 0.0), cam.fov, 1.0));
+    let mut scene = Scene::new(Camera::new(
+        cam.position,
+        cam.look_at,
+        Vec3::new(0.0, 1.0, 0.0),
+        cam.fov,
+        1.0,
+    ));
 
-    scene.add(Plane::new(Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0), ground_material()));
+    scene.add(Plane::new(
+        Vec3::ZERO,
+        Vec3::new(0.0, 1.0, 0.0),
+        ground_material(),
+    ));
 
     scene.add(Sphere::new(
         Vec3::new(-2.3, 1.0, 0.3),
@@ -187,7 +219,11 @@ fn scene_all_objects(cam: CameraParams) -> (Scene, CameraParams) {
     ));
 
     scene.add_light(Light::white(Vec3::new(5.0, 7.0, -3.0), 1.1));
-    scene.add_light(Light::new(Vec3::new(-4.0, 4.0, 4.0), Color::new(0.6, 0.7, 1.0), 0.35));
+    scene.add_light(Light::new(
+        Vec3::new(-4.0, 4.0, 4.0),
+        Color::new(0.6, 0.7, 1.0),
+        0.35,
+    ));
 
     (scene, cam)
 }

@@ -12,7 +12,12 @@ fn to_byte(c: f64) -> u8 {
 
 /// Write a PPM (P3, ASCII) image to `out`, given a flat row-major buffer of
 /// colors (top-left to bottom-right, i.e. row 0 is the top row of the image).
-pub fn write_ppm<W: Write>(out: &mut W, width: usize, height: usize, pixels: &[Color]) -> io::Result<()> {
+pub fn write_ppm<W: Write>(
+    out: &mut W,
+    width: usize,
+    height: usize,
+    pixels: &[Color],
+) -> io::Result<()> {
     debug_assert_eq!(pixels.len(), width * height);
 
     let mut writer = io::BufWriter::new(out);
