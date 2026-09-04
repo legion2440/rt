@@ -30,13 +30,15 @@ impl Cube {
 
 impl Hittable for Cube {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
-        // Slab method: intersect the ray with each pair of axis-aligned planes,
-        // narrowing [t_near, t_far] as we go, tracking which axis produced the
-        // tightest near bound (that's the axis of the hit face / normal).
-        let mut t_near = t_min;
-        let mut t_far = t_max;
+        // Slab method: intersect the ray with each pair of axis-aligned planes.
+        // Track both the entering and exiting faces so rays that start inside
+        // the cube correctly hit the far/exit face and receive its normal.
+        let mut t_near = f64::NEG_INFINITY;
+        let mut t_far = f64::INFINITY;
         let mut near_axis = 0usize;
         let mut near_sign = -1.0_f64;
+        let mut far_axis = 0usize;
+        let mut far_sign = 1.0_f64;
 
         let orig = [ray.origin.x, ray.origin.y, ray.origin.z];
         let dir = [ray.direction.x, ray.direction.y, ray.direction.z];
@@ -50,44 +52,77 @@ impl Hittable for Cube {
                 }
                 continue;
             }
+
             let inv_d = 1.0 / dir[axis];
-            let mut t0 = (bmin[axis] - orig[axis]) * inv_d;
-            let mut t1 = (bmax[axis] - orig[axis]) * inv_d;
-            let mut sign = -1.0;
-            if t0 > t1 {
-                std::mem::swap(&mut t0, &mut t1);
-                sign = 1.0;
-            }
-            if t0 > t_near {
-                t_near = t0;
+            let min_t = (bmin[axis] - orig[axis]) * inv_d;
+            let max_t = (bmax[axis] - orig[axis]) * inv_d;
+            let (axis_near, axis_far, axis_near_sign, axis_far_sign) = if min_t <= max_t {
+                (min_t, max_t, -1.0, 1.0)
+            } else {
+                (max_t, min_t, 1.0, -1.0)
+            };
+
+            if axis_near > t_near {
+                t_near = axis_near;
                 near_axis = axis;
-                near_sign = sign;
+                near_sign = axis_near_sign;
             }
-            t_far = t_far.min(t1);
-            if t_near >= t_far {
+            if axis_far < t_far {
+                t_far = axis_far;
+                far_axis = axis;
+                far_sign = axis_far_sign;
+            }
+
+            if t_near > t_far {
                 return None;
             }
         }
 
-        if t_near <= t_min || t_near >= t_max {
+        let (t, hit_axis, hit_sign) = if t_near > t_min && t_near < t_max {
+            (t_near, near_axis, near_sign)
+        } else if t_far > t_min && t_far < t_max {
+            (t_far, far_axis, far_sign)
+        } else {
             return None;
-        }
+        };
 
-        let point = ray.at(t_near);
+        let point = ray.at(t);
         let mut outward_normal = Vec3::ZERO;
-        match near_axis {
-            0 => outward_normal.x = near_sign,
-            1 => outward_normal.y = near_sign,
-            _ => outward_normal.z = near_sign,
+        match hit_axis {
+            0 => outward_normal.x = hit_sign,
+            1 => outward_normal.y = hit_sign,
+            _ => outward_normal.z = hit_sign,
         }
 
         let (normal, front_face) = face_normal(&ray.direction, outward_normal);
         Some(HitRecord {
-            t: t_near,
+            t,
             point,
             normal,
             front_face,
             material: self.material,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vec3::Color;
+
+    #[test]
+    fn ray_starting_inside_hits_exit_face() {
+        let cube = Cube::new(
+            Vec3::ZERO,
+            2.0,
+            Material::new(Color::new(0.2, 0.3, 0.4)),
+        );
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0));
+
+        let hit = cube.hit(&ray, 1e-4, f64::INFINITY).expect("exit face");
+        assert!((hit.t - 1.0).abs() < 1e-9);
+        assert!((hit.point.x - 1.0).abs() < 1e-9);
+        assert!(!hit.front_face);
+        assert_eq!(hit.normal, Vec3::new(-1.0, 0.0, 0.0));
     }
 }
