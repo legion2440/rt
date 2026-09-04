@@ -2,6 +2,7 @@
 name = "rt"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.63"
 description = "A CPU ray tracer producing PPM images: spheres, cubes, planes, cylinders, shadows, reflection and refraction."
 
 # Deliberately zero external dependencies: pure std (including std::thread::scope
