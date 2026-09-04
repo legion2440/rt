@@ -1,0 +1,75 @@
+name: Refresh RT renders
+
+on:
+  push:
+    paths:
+      - .github/workflows/refresh-renders.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Format and test
+        run: |
+          cargo fmt
+          cargo test
+          cargo build --release
+
+      - name: Render required scenes
+        run: |
+          ./target/release/rt --scene 1 --width 800 --height 600 --reflect --refract --texture --out renders/scene1_sphere.ppm
+          ./target/release/rt --scene 2 --width 800 --height 600 --reflect --refract --texture --out renders/scene2_plane_and_cube_lower_brightness.ppm
+          ./target/release/rt --scene 3 --width 800 --height 600 --reflect --refract --texture --out renders/scene3_all_objects.ppm
+          ./target/release/rt --scene 4 --width 800 --height 600 --reflect --refract --texture --out renders/scene4_all_objects_alt_camera.ppm
+
+      - name: Validate PPM files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('renders/scene1_sphere.ppm'),
+              Path('renders/scene2_plane_and_cube_lower_brightness.ppm'),
+              Path('renders/scene3_all_objects.ppm'),
+              Path('renders/scene4_all_objects_alt_camera.ppm'),
+          ]
+
+          for path in files:
+              text = path.read_text()
+              lines = text.splitlines()
+              tokens = text.split()
+              assert tokens[0] == 'P3', path
+              width, height = map(int, tokens[1:3])
+              assert (width, height) == (800, 600), (path, width, height)
+              assert tokens[3] == '255', path
+              samples = list(map(int, tokens[4:]))
+              assert len(samples) == width * height * 3, (path, len(samples))
+              assert all(0 <= value <= 255 for value in samples), path
+              assert all(len(line) <= 70 for line in lines[3:]), path
+              print(f'{path}: P3 {width}x{height}, {len(samples)} samples, max line {max(map(len, lines[3:]))}')
+          PY
+
+      - name: Commit generated files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src Cargo.toml Cargo.lock renders
+          if git diff --cached --quiet; then
+            echo 'No generated changes.'
+          else
+            git commit -m 'refresh required renders [skip ci]'
+            git push
+          fi
