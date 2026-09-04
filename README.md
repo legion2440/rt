@@ -1,6 +1,6 @@
 # RT — CPU Ray Tracer
 
-A CPU ray tracer written in Rust for the 01-edu `rt` assignment. It renders spheres, cubes, planes and cylinders to ASCII PPM (`P3`) images with movable cameras, configurable lighting, cast shadows, procedural textures, reflection and refraction.
+A CPU ray tracer written in Rust for the 01-edu `rt` assignment. It renders spheres, cubes, planes and cylinders to ASCII PPM (`P3`) images with movable cameras, configurable lighting, cast shadows, procedural textures, reflection, refraction, particles and a procedural fluid surface.
 
 · [Русская версия](README_RU.md)
 
@@ -32,7 +32,7 @@ A CPU ray tracer written in Rust for the 01-edu `rt` assignment. It renders sphe
 cargo build --release
 ```
 
-### Render a complete scene
+### Render a complete required scene
 
 ```bash
 ./target/release/rt \
@@ -42,6 +42,19 @@ cargo build --release
   --texture \
   --out output.ppm
 ```
+
+### Render the bonus showcase
+
+```bash
+./target/release/rt \
+  --scene 5 \
+  --reflect \
+  --refract \
+  --texture \
+  --out bonus.ppm
+```
+
+Scene 5 contains a deterministic particle fountain and a finite procedural wavy fluid surface. Reflection/refraction make the fluid material read more like water, while the particle system remains ordinary ray-traced geometry.
 
 The subject-style stdout workflow is also supported. Rendering logs are written to `stderr`, so they do not corrupt the image stream:
 
@@ -65,6 +78,11 @@ For every output pixel, the camera emits a ray into the scene. The renderer find
 - **shadows** — a shadow ray is cast from the hit point towards each light and suppresses that light when another object blocks it.
 
 Optional reflection and refraction recursively trace secondary rays up to a fixed depth. Procedural checker textures are evaluated directly from the 3D hit point.
+
+Bonus geometry is integrated through the same `Hittable` interface as the required primitives:
+
+- `ParticleCloud` intersects a deterministic collection of small spherical particles as one scene object;
+- `FluidSurface` ray-traces a bounded sinusoidal height field and derives normals from its analytic gradient.
 
 Rows are rendered in parallel with `std::thread::scope`. The final image is written as a plain-text `P3` PPM file with conservative line wrapping.
 
@@ -93,9 +111,9 @@ The four audit renders are stored in [`renders/`](renders/) at **800×600**.
 
 | File | Scene |
 | --- | --- |
-| `scene1_sphere.ppm` | Sphere above a plane, bright key light plus soft fill |
-| `scene2_plane_and_cube_lower_brightness.ppm` | Plane + cube, with a lower key-light intensity than scene 1 |
-| `scene3_all_objects.ppm` | All required primitives, plus the glass sphere used to demonstrate refraction |
+| `scene1_sphere.ppm` | Red sphere above a plane, bright key light plus soft fill |
+| `scene2_plane_and_cube_lower_brightness.ppm` | Blue cube + plane, with a lower key-light intensity than scene 1 |
+| `scene3_all_objects.ppm` | All required primitives, a checker-textured cube, plus the glass sphere used to demonstrate refraction |
 | `scene4_all_objects_alt_camera.ppm` | The same scene as scene 3 from another camera position |
 
 Regenerate all four with:
@@ -120,14 +138,14 @@ cargo build --release
   --out renders/scene4_all_objects_alt_camera.ppm
 ```
 
-Scene 2 keeps the same soft fill as scene 1 but uses a dimmer key light (`0.5` instead of `1.2`), preserving the assignment's lower-brightness comparison while keeping the cube readable from the camera side.
+Scene 2 keeps the same soft fill as scene 1 but uses a dimmer key light (`0.5` instead of `1.2`). The required sphere and cube use deliberately modest reflectivity so their own red/blue material remains visually dominant; stronger reflective/refractive effects are demonstrated in scenes 3 and 5 instead.
 
 ## 🎛️ CLI reference
 
 ```text
 rt [OPTIONS]
 
---scene <1|2|3|4>    Demo scene to render (default: 1)
+--scene <1|2|3|4|5>  Demo scene; 5 is the bonus showcase (default: 1)
 --width <N>          Image width (default: 800)
 --height <N>         Image height (default: 600)
 --out <FILE>         Write PPM to FILE (default: stdout)
@@ -164,15 +182,24 @@ Top-down views are supported as well:
 
 ## ✨ Bonus features
 
+All four bonus questions from the official audit are implemented.
+
+| Bonus | Implementation | Demo |
+| --- | --- | --- |
+| Textures | `Material::checker(...)` | Checker ground and cube in scenes 3/4 |
+| Reflection / refraction | Recursive secondary rays, Snell refraction and IOR | Glass sphere in scenes 3/4, water in scene 5 |
+| Particles | `ParticleCloud` | Fountain in scene 5 |
+| Fluids | `FluidSurface` bounded sinusoidal height field | Wavy water patch in scene 5 |
+
 ### Procedural textures
 
-Enable with:
+Enable texture evaluation with:
 
 ```bash
 --texture
 ```
 
-`Material::checker(...)` provides a two-color checker pattern. The required scene 3/4 setup demonstrates it on both the ground and the cube.
+`Material::checker(...)` provides a two-color checker pattern. Scenes 3/4 demonstrate it on both the ground and a finite cube.
 
 ### Reflection
 
@@ -192,15 +219,52 @@ Enable with:
 --refract
 ```
 
-Transparent materials use Snell's law with an index of refraction (`ior`) and fall back to total internal reflection when refraction is impossible. The additional glass sphere in scenes 3/4 demonstrates this feature.
+Transparent materials use Snell's law with an index of refraction (`ior`) and fall back to total internal reflection when refraction is impossible. The additional glass sphere in scenes 3/4 demonstrates this feature; scene 5 uses water-like `ior = 1.333` on the fluid surface.
 
-Particles and fluids are not implemented.
+### Particles
+
+`ParticleCloud` stores many small particles but exposes them as a single `Hittable`. `ParticleCloud::fountain(...)` produces deterministic positions, so bonus output is repeatable and needs no random-number dependency.
+
+```rust
+scene.add(ParticleCloud::fountain(
+    Vec3::new(-2.0, 0.1, 0.0),
+    72,
+    Material::new(Color::new(1.0, 0.45, 0.12)),
+));
+```
+
+### Fluids
+
+`FluidSurface` represents a finite height field:
+
+```text
+y = base + amplitude * sin(f*x) * cos(f*z)
+```
+
+Rays are restricted to the fluid's bounding box, surface crossings are refined by bisection, and normals are computed from the analytic height gradient.
+
+```rust
+scene.add(FluidSurface::new(
+    Vec3::new(1.35, 0.48, 0.0),
+    1.75,
+    1.55,
+    0.18,
+    2.7,
+    water_material,
+));
+```
+
+Render all bonus features together:
+
+```bash
+./target/release/rt --scene 5 --reflect --refract --texture --out bonus.ppm
+```
 
 ## 🧱 Creating and changing scenes
 
-The four built-in scenes live in [`src/scenes.rs`](src/scenes.rs). For normal audit experiments, edit an existing scene or use CLI camera/brightness overrides.
+The built-in scenes live in [`src/scenes.rs`](src/scenes.rs). Scenes 1-4 are the mandatory deliverables; scene 5 is an isolated bonus showcase. For normal audit experiments, edit an existing scene or use CLI camera/brightness overrides.
 
-Typical object construction:
+Typical required-object construction:
 
 ```rust
 scene.add(Sphere::new(
@@ -230,11 +294,11 @@ scene.add(Cylinder::new(
 ));
 ```
 
-To add a new numbered preset such as scene 5:
+To add another numbered preset such as scene 6:
 
 1. copy one of the scene-builder functions in `src/scenes.rs` and change its objects/lights/camera;
-2. add `5 => your_scene_function()` to the `match` inside `scenes::build`;
-3. extend the `--scene` validation and help text in `src/main.rs` from `1..=4` to include the new preset;
+2. add `6 => your_scene_function()` to the `match` inside `scenes::build`;
+3. extend the `--scene` validation and help text in `src/main.rs` from `1..=5` to include the new preset;
 4. rebuild with `cargo build --release`.
 
 For changing only object positions, brightness or the existing camera, no new preset is necessary.
@@ -249,18 +313,22 @@ cargo test
 cargo build --release
 ```
 
-The unit tests cover the important robustness fixes:
+The unit tests cover:
 
 - top-down and degenerate camera basis handling;
 - cube rays that start inside the box and must hit the exit face;
-- P3 output sample count and line-length wrapping.
+- P3 output sample count and line-length wrapping;
+- direct `ParticleCloud` intersection;
+- direct `FluidSurface` intersection.
 
-A fast functional smoke test:
+Fast functional smoke tests:
 
 ```bash
 ./target/release/rt --scene 1 --width 160 --height 120 --out /tmp/scene1.ppm
 ./target/release/rt --scene 3 --width 160 --height 120 \
   --reflect --refract --texture --out /tmp/scene3.ppm
+./target/release/rt --scene 5 --width 320 --height 240 \
+  --reflect --refract --texture --out /tmp/bonus.ppm
 ```
 
 A valid generated file starts with:
@@ -286,6 +354,8 @@ rt/
 │   ├── shapes/
 │   │   ├── cube.rs
 │   │   ├── cylinder.rs
+│   │   ├── fluid.rs
+│   │   ├── particle.rs
 │   │   ├── plane.rs
 │   │   ├── sphere.rs
 │   │   └── mod.rs
@@ -311,7 +381,8 @@ rt/
 
 - The renderer intentionally uses one primary ray per pixel; anti-aliasing is outside the assignment scope.
 - Reflection/refraction recursion is capped to guarantee termination.
-- Bonus effects are opt-in, keeping the default render lightweight.
+- The particle system is deterministic rather than animated; the bonus concerns the ability to add particles to a ray-traced scene.
+- The fluid bonus is a ray-traced procedural wavy surface, not a Navier-Stokes simulation.
 - Runtime status is printed to `stderr`; image data goes to `stdout` unless `--out` is supplied.
 - Root-level `output.ppm` is ignored so temporary renders are not accidentally committed; the four required deliverables remain under `renders/`.
 
