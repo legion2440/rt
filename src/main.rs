@@ -78,7 +78,7 @@ USAGE:
     rt [OPTIONS]
 
 OPTIONS:
-    --scene <1|2|3|4>       Which demo scene to render (default: 1)
+    --scene <1|2|3|4|5>     Demo scene to render; 5 is the bonus showcase (default: 1)
     --width <N>             Image width in pixels (default: 800)
     --height <N>            Image height in pixels (default: 600)
     --out <FILE>            Write the PPM image to FILE (default: stdout)
@@ -95,6 +95,7 @@ OPTIONS:
 EXAMPLES:
     rt --scene 1 --out renders/scene1_sphere.ppm
     rt --scene 3 --reflect --refract --texture --out renders/all_objects.ppm
+    rt --scene 5 --reflect --refract --texture --out bonus.ppm
     rt --scene 3 --camera 6,4,6 --look-at 0,1,0 --out renders/other_angle.ppm
     rt --scene 1 --width 320 --height 240 > preview.ppm
 
@@ -134,8 +135,8 @@ fn parse_args() -> Result<Option<Config>, String> {
         }
     }
 
-    if !(1..=4).contains(&cfg.scene) {
-        return Err(format!("--scene must be 1, 2, 3 or 4 (got {})", cfg.scene));
+    if !(1..=5).contains(&cfg.scene) {
+        return Err(format!("--scene must be 1, 2, 3, 4 or 5 (got {})", cfg.scene));
     }
     if cfg.width == 0 || cfg.height == 0 {
         return Err("--width/--height must be > 0".to_string());
@@ -168,8 +169,6 @@ fn render(
             s.spawn(move || {
                 for (local_row, row_pixels) in chunk.chunks_mut(width).enumerate() {
                     let row = row_start + local_row;
-                    // Image row 0 is the top of the image, but our camera's `t`
-                    // parameter is bottom-up, so flip vertically here.
                     let t = 1.0 - (row as f64 + 0.5) / height as f64;
                     for (col, pixel) in row_pixels.iter_mut().enumerate() {
                         let u = (col as f64 + 0.5) / width as f64;
@@ -195,7 +194,6 @@ fn run() -> Result<(), String> {
 
     let aspect_ratio = cfg.width as f64 / cfg.height as f64;
     let camera_override = if cfg.camera.is_some() || cfg.look_at.is_some() || cfg.fov.is_some() {
-        // Reasonable defaults for whichever of position/look_at/fov wasn't overridden.
         Some(CameraParams {
             position: cfg.camera.unwrap_or(Vec3::new(0.0, 2.0, 6.0)),
             look_at: cfg.look_at.unwrap_or(Vec3::new(0.0, 1.0, 0.0)),
