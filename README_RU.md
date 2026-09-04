@@ -1,6 +1,6 @@
 # RT — CPU Ray Tracer
 
-CPU ray tracer на Rust для задания 01-edu `rt`. Проект рендерит сферы, кубы, плоскости и цилиндры в ASCII PPM (`P3`), поддерживает перемещение камеры, настройку света, отбрасываемые тени, процедурные текстуры, отражение и преломление.
+CPU ray tracer на Rust для задания 01-edu `rt`. Проект рендерит сферы, кубы, плоскости и цилиндры в ASCII PPM (`P3`), поддерживает перемещение камеры, настройку света, тени, процедурные текстуры, отражение, преломление, частицы и процедурную поверхность жидкости.
 
 · [English version](README.md)
 
@@ -32,7 +32,7 @@ CPU ray tracer на Rust для задания 01-edu `rt`. Проект рен�
 cargo build --release
 ```
 
-### Рендер полной сцены
+### Обязательная сцена
 
 ```bash
 ./target/release/rt \
@@ -42,6 +42,19 @@ cargo build --release
   --texture \
   --out output.ppm
 ```
+
+### Демонстрация всех бонусов
+
+```bash
+./target/release/rt \
+  --scene 5 \
+  --reflect \
+  --refract \
+  --texture \
+  --out bonus.ppm
+```
+
+Scene 5 содержит детерминированный фонтан частиц и ограниченную волнистую поверхность жидкости. Reflection/refraction делают жидкость похожей на воду, а частицы остаются обычной ray-traced геометрией.
 
 Поддерживается и вариант из subject с выводом изображения через `stdout`. Служебные сообщения идут в `stderr`, поэтому PPM не портится:
 
@@ -57,18 +70,23 @@ cargo run --release -- --scene 1 > output.ppm
 
 ## 📝 О проекте
 
-Для каждого пикселя камера выпускает луч в сцену. Рендерер ищет ближайшее пересечение с объектами и рассчитывает поверхность по Phong-подобной модели освещения:
+Для каждого пикселя камера выпускает луч в сцену. Рендерер ищет ближайшее пересечение и рассчитывает поверхность по Phong-подобной модели:
 
 - **ambient** — базовая составляющая;
-- **diffuse** — ламбертовское освещение от видимых источников;
-- **specular** — блики, зависящие от направления камеры;
-- **shadows** — от точки пересечения к каждому источнику отправляется shadow ray; если другой объект перекрывает свет, вклад этого источника не учитывается.
+- **diffuse** — ламбертовское освещение;
+- **specular** — блики;
+- **shadows** — shadow ray к каждому источнику света.
 
-Опциональные отражение и преломление рекурсивно трассируют вторичные лучи с ограниченной глубиной. Procedural checker texture вычисляется непосредственно по 3D-координатам точки пересечения.
+Reflection и refraction рекурсивно трассируют вторичные лучи с ограниченной глубиной. Checker texture вычисляется по 3D-координатам точки пересечения.
 
-Строки изображения рендерятся параллельно через `std::thread::scope`. Финальный результат записывается в текстовый PPM `P3` с безопасным переносом длинных строк.
+Бонусная геометрия использует тот же `Hittable`, что и обязательные примитивы:
 
-Подробное описание API и примеры создания объектов находятся в [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+- `ParticleCloud` хранит набор маленьких сферических частиц как один scene object;
+- `FluidSurface` трассирует ограниченный синусоидальный height field и вычисляет нормали из аналитического градиента.
+
+Строки изображения рендерятся параллельно через `std::thread::scope`. Результат записывается в текстовый PPM `P3` с переносом строк не длиннее 70 символов.
+
+Подробный API: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ## ✅ Обязательные возможности
 
@@ -78,14 +96,14 @@ cargo run --release -- --scene 1 > output.ppm
 | Куб | `src/shapes/cube.rs` |
 | Плоскость | `src/shapes/plane.rs` |
 | Цилиндр | `src/shapes/cylinder.rs` |
-| Перемещение объектов | Координаты/центры/оси конструкторов в `src/scenes.rs` |
-| Перемещение и направление камеры | `--camera`, `--look-at`, `--fov` |
-| Изменение яркости | Интенсивность каждого света и глобальный `--brightness` |
+| Перемещение объектов | Координаты/центры/оси в `src/scenes.rs` |
+| Камера | `--camera`, `--look-at`, `--fov` |
+| Яркость | Интенсивность света + `--brightness` |
 | Тени | Shadow rays в `src/renderer.rs` |
-| Изменяемое разрешение | `--width`, `--height` |
+| Разрешение | `--width`, `--height` |
 | PPM | ASCII `P3` writer в `src/ppm.rs` |
 
-Базис камеры содержит fallback для строго верхнего/нижнего ракурса и случая, когда `position` совпадает с `look_at`, поэтому типичные camera overrides не схлопывают изображение в один луч.
+Камера имеет fallback для top-down/bottom-up ракурсов и случая `position == look_at`.
 
 ## 🖼️ Обязательные demo-сцены
 
@@ -93,12 +111,12 @@ cargo run --release -- --scene 1 > output.ppm
 
 | Файл | Сцена |
 | --- | --- |
-| `scene1_sphere.ppm` | Сфера над плоскостью, яркий key light + мягкий fill light |
-| `scene2_plane_and_cube_lower_brightness.ppm` | Плоскость + куб, key light слабее, чем в scene 1 |
-| `scene3_all_objects.ppm` | Все обязательные примитивы + стеклянная сфера для демонстрации преломления |
-| `scene4_all_objects_alt_camera.ppm` | Та же сцена, что scene 3, но с другой позицией камеры |
+| `scene1_sphere.ppm` | Красная сфера над плоскостью, bright key + soft fill |
+| `scene2_plane_and_cube_lower_brightness.ppm` | Синий куб + плоскость, key light слабее scene 1 |
+| `scene3_all_objects.ppm` | Все обязательные примитивы, checker-куб и стеклянная сфера |
+| `scene4_all_objects_alt_camera.ppm` | Та же сцена, что scene 3, с другой камеры |
 
-Перегенерация всех четырёх:
+Перегенерация:
 
 ```bash
 cargo build --release
@@ -120,32 +138,31 @@ cargo build --release
   --out renders/scene4_all_objects_alt_camera.ppm
 ```
 
-Scene 2 использует тот же мягкий fill light, что и scene 1, но key light имеет меньшую интенсивность (`0.5` вместо `1.2`). Это сохраняет требуемую разницу по яркости и одновременно делает переднюю грань куба читаемой.
+У обязательной красной сферы и синего куба reflectivity специально уменьшена, чтобы их собственный цвет визуально доминировал. Более сильные reflection/refraction демонстрируются в scenes 3 и 5.
 
 ## 🎛️ CLI
 
 ```text
 rt [OPTIONS]
 
---scene <1|2|3|4>    Demo-сцена (по умолчанию: 1)
---width <N>          Ширина (по умолчанию: 800)
---height <N>         Высота (по умолчанию: 600)
---out <FILE>         Записать PPM в файл (по умолчанию: stdout)
+--scene <1|2|3|4|5>  Demo-сцена; 5 — bonus showcase (default: 1)
+--width <N>          Ширина (default: 800)
+--height <N>         Высота (default: 600)
+--out <FILE>         PPM-файл (default: stdout)
 --reflect            Включить отражение
 --refract            Включить преломление
 --texture            Включить процедурные текстуры
---brightness <F>     Общий множитель яркости (по умолчанию: 1.0)
---camera <x,y,z>     Переопределить позицию камеры
---look-at <x,y,z>    Переопределить точку взгляда
---fov <deg>          Переопределить вертикальный FOV
---threads <N>        Количество worker threads
--h, --help           Показать help
+--brightness <F>     Общий множитель яркости
+--camera <x,y,z>     Позиция камеры
+--look-at <x,y,z>    Точка взгляда
+--fov <deg>          Вертикальный FOV
+--threads <N>        Worker threads
+-h, --help           Help
 ```
 
-Изменение ракурса без правки кода:
+Другой ракурс без изменения кода:
 
 ```bash
-./target/release/rt --scene 3 --out front.ppm
 ./target/release/rt --scene 3 \
   --camera 6,4,-6 \
   --look-at 0,1,0 \
@@ -153,7 +170,7 @@ rt [OPTIONS]
   --out side.ppm
 ```
 
-Работает и строгий вид сверху:
+Top-down:
 
 ```bash
 ./target/release/rt --scene 3 \
@@ -164,19 +181,24 @@ rt [OPTIONS]
 
 ## ✨ Бонусы
 
-### Процедурные текстуры
+Все четыре бонусных вопроса официального audit реализованы.
 
-Включение:
+| Бонус | Реализация | Демонстрация |
+| --- | --- | --- |
+| Textures | `Material::checker(...)` | Земля и куб в scenes 3/4 |
+| Reflection / refraction | Recursive rays, Snell + IOR | Glass sphere в 3/4, вода в 5 |
+| Particles | `ParticleCloud` | Фонтан в scene 5 |
+| Fluids | `FluidSurface` | Волнистая вода в scene 5 |
+
+### Процедурные текстуры
 
 ```bash
 --texture
 ```
 
-`Material::checker(...)` создаёт двухцветный checker pattern. В scene 3/4 он виден и на земле, и на кубе.
+`Material::checker(...)` создаёт двухцветный checker pattern. В scenes 3/4 он виден и на земле, и на кубе.
 
 ### Отражение
-
-Включение:
 
 ```bash
 --reflect
@@ -186,21 +208,56 @@ rt [OPTIONS]
 
 ### Преломление
 
-Включение:
-
 ```bash
 --refract
 ```
 
-Прозрачные материалы используют закон Снеллиуса и `ior`; при невозможности преломления используется total internal reflection. Дополнительная стеклянная сфера в scene 3/4 демонстрирует этот бонус.
+Прозрачные материалы используют закон Снеллиуса и `ior`. Стеклянная сфера в scenes 3/4 показывает refraction; вода в scene 5 использует `ior = 1.333`.
 
-Частицы и жидкости не реализованы.
+### Частицы
+
+`ParticleCloud` хранит множество маленьких частиц, но реализует один `Hittable`. `ParticleCloud::fountain(...)` создаёт повторяемый фонтан без `rand` и сторонних зависимостей.
+
+```rust
+scene.add(ParticleCloud::fountain(
+    Vec3::new(-2.0, 0.1, 0.0),
+    72,
+    Material::new(Color::new(1.0, 0.45, 0.12)),
+));
+```
+
+### Жидкости
+
+`FluidSurface` — конечный height field:
+
+```text
+y = base + amplitude * sin(f*x) * cos(f*z)
+```
+
+Пересечение ищется внутри bounding box и уточняется bisection; normal вычисляется аналитически.
+
+```rust
+scene.add(FluidSurface::new(
+    Vec3::new(1.35, 0.48, 0.0),
+    1.75,
+    1.55,
+    0.18,
+    2.7,
+    water_material,
+));
+```
+
+Все бонусы вместе:
+
+```bash
+./target/release/rt --scene 5 --reflect --refract --texture --out bonus.ppm
+```
 
 ## 🧱 Создание и изменение сцен
 
-Четыре встроенные сцены находятся в [`src/scenes.rs`](src/scenes.rs). Для обычных экспериментов аудита достаточно изменить существующую сцену или использовать CLI overrides камеры и яркости.
+Встроенные сцены находятся в [`src/scenes.rs`](src/scenes.rs). Scenes 1-4 — обязательные, scene 5 — изолированная bonus demo.
 
-Примеры создания объектов:
+Примеры обязательных объектов:
 
 ```rust
 scene.add(Sphere::new(
@@ -230,18 +287,16 @@ scene.add(Cylinder::new(
 ));
 ```
 
-Чтобы добавить новый numbered preset, например scene 5:
+Чтобы добавить scene 6:
 
-1. скопируй одну из функций построения сцены в `src/scenes.rs` и измени объекты/свет/камеру;
-2. добавь `5 => your_scene_function()` в `match` внутри `scenes::build`;
-3. расширь в `src/main.rs` валидацию `--scene` и текст help с `1..=4` на новый диапазон;
-4. пересобери проект через `cargo build --release`.
+1. скопируй scene-builder в `src/scenes.rs`;
+2. добавь `6 => your_scene_function()` в `scenes::build`;
+3. расширь CLI validation/help в `src/main.rs` с `1..=5`;
+4. `cargo build --release`.
 
-Если нужно только переместить объекты, изменить яркость или камеру существующей сцены, новый preset не нужен.
+Если нужно только переместить объект, изменить свет или камеру, новый preset не нужен.
 
 ## 🧪 Проверка
-
-Перед аудитом:
 
 ```bash
 cargo fmt -- --check
@@ -249,21 +304,25 @@ cargo test
 cargo build --release
 ```
 
-Unit-тесты закрывают основные robustness-фиксы:
+Unit-тесты проверяют:
 
-- top-down и degenerate camera basis;
-- луч, начинающийся внутри куба, с корректным попаданием в exit face;
-- количество P3 samples и ограничение длины строк.
+- degenerate/top-down camera basis;
+- cube ray from inside + правильную exit-face normal;
+- P3 sample count и line wrapping;
+- прямое пересечение `ParticleCloud`;
+- прямое пересечение `FluidSurface`.
 
-Быстрый smoke test:
+Smoke tests:
 
 ```bash
-./target/release/rt --scene 1 --width 160 --height 120 --out /tmp/scene1.ppm
+./target/release/rt --scene 1 --width 160 --height 120 --out scene1.ppm
 ./target/release/rt --scene 3 --width 160 --height 120 \
-  --reflect --refract --texture --out /tmp/scene3.ppm
+  --reflect --refract --texture --out scene3.ppm
+./target/release/rt --scene 5 --width 320 --height 240 \
+  --reflect --refract --texture --out bonus.ppm
 ```
 
-Корректный файл начинается с:
+PPM начинается с:
 
 ```text
 P3
@@ -286,6 +345,8 @@ rt/
 │   ├── shapes/
 │   │   ├── cube.rs
 │   │   ├── cylinder.rs
+│   │   ├── fluid.rs
+│   │   ├── particle.rs
 │   │   ├── plane.rs
 │   │   ├── sphere.rs
 │   │   └── mod.rs
@@ -309,11 +370,12 @@ rt/
 
 ## ⚠️ Примечания
 
-- Рендерер намеренно использует один primary ray на пиксель; anti-aliasing не входит в scope задания.
-- Глубина рекурсии reflection/refraction ограничена для гарантированного завершения.
-- Бонусные эффекты включаются флагами и не замедляют default render.
-- Runtime status идёт в `stderr`; данные изображения — в `stdout`, если не указан `--out`.
-- Корневой `output.ppm` добавлен в `.gitignore`, чтобы временные рендеры не попадали в репозиторий; четыре обязательных файла остаются в `renders/`.
+- Один primary ray на пиксель; anti-aliasing не входит в scope.
+- Глубина reflection/refraction ограничена.
+- Particle bonus статический и детерминированный, а не animation system.
+- Fluid bonus — ray-traced procedural wavy surface, не Navier-Stokes simulation.
+- Runtime status идёт в `stderr`; image data — в `stdout`, если нет `--out`.
+- В `renders/` остаются только четыре обязательных PPM; bonus render генерируется локально при необходимости.
 
 ## 🧑‍💻 Авторы
 
