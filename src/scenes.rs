@@ -1,13 +1,12 @@
-//! The 4 required demo scenes, plus the plumbing to override the camera
-//! from the command line. This file doubles as a worked example for the
-//! documentation: see docs/DOCUMENTATION.md for a walk-through of the code
-//! below.
+//! The 4 required demo scenes plus a fifth bonus showcase scene, with
+//! command-line camera overrides. This file doubles as a worked example for
+//! the documentation: see docs/DOCUMENTATION.md for a walk-through.
 
 use crate::camera::Camera;
 use crate::light::Light;
 use crate::material::Material;
 use crate::scene::Scene;
-use crate::shapes::{Cube, Cylinder, Plane, Sphere};
+use crate::shapes::{Cube, Cylinder, FluidSurface, ParticleCloud, Plane, Sphere};
 use crate::vec3::{Color, Vec3};
 
 /// Camera parameters, so they can be overridden from the CLI without
@@ -31,19 +30,23 @@ fn ground_material() -> Material {
 }
 
 fn soft_fill_light() -> Light {
-    Light::new(Vec3::new(-3.0, 3.0, 5.0), Color::new(0.9, 0.9, 1.0), 0.3)
+    Light::new(
+        Vec3::new(-3.0, 3.0, 5.0),
+        Color::new(0.9, 0.9, 1.0),
+        0.3,
+    )
 }
 
-/// Build one of the 4 numbered demo scenes. `aspect_ratio` = width/height of
-/// the target image. `camera_override`, when set, replaces the scene's
-/// default camera (used by the `--camera`/`--look-at`/`--fov` CLI flags).
+/// Build one of the numbered demo scenes. Scenes 1-4 are the required audit
+/// renders; scene 5 is a bonus showcase for particles and fluids.
 pub fn build(preset: u32, aspect_ratio: f64, camera_override: Option<CameraParams>) -> Scene {
     let (mut scene, default_cam) = match preset {
         1 => scene_sphere(),
         2 => scene_plane_and_cube(),
         3 => scene_all_objects(default_camera_3()),
         4 => scene_all_objects(default_camera_4()),
-        other => panic!("unknown --scene {other}, expected 1, 2, 3 or 4"),
+        5 => scene_bonus_showcase(),
+        other => panic!("unknown --scene {other}, expected 1, 2, 3, 4 or 5"),
     };
     let cam = camera_override.unwrap_or(default_cam);
     scene.camera = Camera::new(
@@ -64,7 +67,6 @@ fn scene_sphere() -> (Scene, CameraParams) {
         look_at: Vec3::new(0.0, 1.0, 0.0),
         fov: 55.0,
     };
-    // Camera/aspect get replaced in `build`; pass a placeholder here.
     let mut scene = Scene::new(Camera::new(
         cam.position,
         cam.look_at,
@@ -86,7 +88,7 @@ fn scene_sphere() -> (Scene, CameraParams) {
             .diffuse(0.8)
             .specular(0.5)
             .shininess(48.0)
-            .reflectivity(0.35),
+            .reflectivity(0.12),
     ));
 
     scene.add_light(Light::white(Vec3::new(5.0, 6.0, -3.0), 1.2));
@@ -124,7 +126,7 @@ fn scene_plane_and_cube() -> (Scene, CameraParams) {
             .diffuse(0.8)
             .specular(0.4)
             .shininess(32.0)
-            .reflectivity(0.15),
+            .reflectivity(0.05),
     ));
 
     scene.add_light(Light::white(Vec3::new(5.0, 6.0, -3.0), 0.5));
@@ -141,8 +143,7 @@ fn default_camera_3() -> CameraParams {
     }
 }
 
-/// Same scene as camera 3, but viewed from a different angle (further
-/// requirement: same scene, different perspective).
+/// Same scene as camera 3, but viewed from a different angle.
 fn default_camera_4() -> CameraParams {
     CameraParams {
         position: Vec3::new(-6.0, 3.5, -6.5),
@@ -178,8 +179,6 @@ fn scene_all_objects(cam: CameraParams) -> (Scene, CameraParams) {
             .reflectivity(0.35),
     ));
 
-    // Checker material makes the texture bonus immediately visible on a
-    // finite object as well as on the ground plane when --texture is enabled.
     scene.add(Cube::new(
         Vec3::new(0.0, 0.75, -0.5),
         1.5,
@@ -205,7 +204,6 @@ fn scene_all_objects(cam: CameraParams) -> (Scene, CameraParams) {
             .shininess(24.0),
     ));
 
-    // Glass sphere sitting in front, showcasing the refraction bonus when --refract is set.
     scene.add(Sphere::new(
         Vec3::new(0.2, 0.55, 2.2),
         0.55,
@@ -223,6 +221,68 @@ fn scene_all_objects(cam: CameraParams) -> (Scene, CameraParams) {
         Vec3::new(-4.0, 4.0, 4.0),
         Color::new(0.6, 0.7, 1.0),
         0.35,
+    ));
+
+    (scene, cam)
+}
+
+/// Scene 5: bonus showcase. A deterministic particle fountain sits beside a
+/// finite sinusoidal water surface. The water material also benefits from the
+/// reflection/refraction flags, so all bonus features can be shown together.
+fn scene_bonus_showcase() -> (Scene, CameraParams) {
+    let cam = CameraParams {
+        position: Vec3::new(0.0, 3.4, 8.0),
+        look_at: Vec3::new(0.0, 1.1, 0.0),
+        fov: 50.0,
+    };
+    let mut scene = Scene::new(Camera::new(
+        cam.position,
+        cam.look_at,
+        Vec3::new(0.0, 1.0, 0.0),
+        cam.fov,
+        1.0,
+    ));
+
+    scene.add(Plane::new(
+        Vec3::ZERO,
+        Vec3::new(0.0, 1.0, 0.0),
+        Material::new(Color::new(0.18, 0.2, 0.24))
+            .diffuse(0.8)
+            .specular(0.08)
+            .ambient(0.12),
+    ));
+
+    scene.add(ParticleCloud::fountain(
+        Vec3::new(-2.0, 0.1, 0.0),
+        72,
+        Material::new(Color::new(1.0, 0.45, 0.12))
+            .diffuse(0.75)
+            .specular(0.5)
+            .shininess(48.0)
+            .reflectivity(0.08),
+    ));
+
+    scene.add(FluidSurface::new(
+        Vec3::new(1.35, 0.48, 0.0),
+        1.75,
+        1.55,
+        0.18,
+        2.7,
+        Material::new(Color::new(0.08, 0.38, 0.82))
+            .ambient(0.12)
+            .diffuse(0.45)
+            .specular(0.9)
+            .shininess(120.0)
+            .reflectivity(0.3)
+            .transparency(0.35)
+            .ior(1.333),
+    ));
+
+    scene.add_light(Light::white(Vec3::new(4.5, 7.0, 4.0), 1.15));
+    scene.add_light(Light::new(
+        Vec3::new(-4.0, 4.5, 3.0),
+        Color::new(0.7, 0.8, 1.0),
+        0.4,
     ));
 
     (scene, cam)
