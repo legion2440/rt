@@ -30,11 +30,7 @@ fn ground_material() -> Material {
 }
 
 fn soft_fill_light() -> Light {
-    Light::new(
-        Vec3::new(-3.0, 3.0, 5.0),
-        Color::new(0.9, 0.9, 1.0),
-        0.3,
-    )
+    Light::new(Vec3::new(-3.0, 3.0, 5.0), Color::new(0.9, 0.9, 1.0), 0.3)
 }
 
 /// Build one of the numbered demo scenes. Scenes 1-4 are the required audit

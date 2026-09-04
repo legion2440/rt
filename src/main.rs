@@ -136,7 +136,10 @@ fn parse_args() -> Result<Option<Config>, String> {
     }
 
     if !(1..=5).contains(&cfg.scene) {
-        return Err(format!("--scene must be 1, 2, 3, 4 or 5 (got {})", cfg.scene));
+        return Err(format!(
+            "--scene must be 1, 2, 3, 4 or 5 (got {})",
+            cfg.scene
+        ));
     }
     if cfg.width == 0 || cfg.height == 0 {
         return Err("--width/--height must be > 0".to_string());
