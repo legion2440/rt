@@ -12,6 +12,8 @@ This document explains how the ray tracer works, how to run it, and how to creat
 - [Materials and textures](#materials-and-textures)
 - [Lights and brightness](#lights-and-brightness)
 - [Moving and aiming the camera](#moving-and-aiming-the-camera)
+- [Particles](#particles)
+- [Fluids](#fluids)
 - [Adding a custom scene preset](#adding-a-custom-scene-preset)
 - [Required renders](#required-renders)
 - [PPM output](#ppm-output)
@@ -28,6 +30,11 @@ The required primitives are implemented independently:
 - `Cube` — axis-aligned slab intersection, including rays that start inside the box;
 - `Plane` — ray/plane equation;
 - `Cylinder` — finite side surface plus top and bottom caps.
+
+Bonus geometry uses the same `Hittable` interface:
+
+- `ParticleCloud` — a deterministic collection of small spherical particles presented as one scene object;
+- `FluidSurface` — a finite sinusoidal height field intersected inside its bounding box.
 
 At the closest hit point, `renderer::trace` evaluates a Phong-style lighting model:
 
@@ -60,6 +67,12 @@ Render scene 1 to a file:
 ./target/release/rt --scene 1 --out output.ppm
 ```
 
+Render the isolated bonus scene:
+
+```bash
+./target/release/rt --scene 5 --reflect --refract --texture --out bonus.ppm
+```
+
 The subject-style stdout form is also supported:
 
 ```bash
@@ -79,7 +92,7 @@ For fast iteration, lower the resolution:
 ```text
 rt [OPTIONS]
 
---scene <1|2|3|4>    Built-in scene (default: 1)
+--scene <1|2|3|4|5>  Built-in scene; 5 is the bonus showcase (default: 1)
 --width <N>          Image width in pixels (default: 800)
 --height <N>         Image height in pixels (default: 600)
 --out <FILE>         Write PPM to FILE (default: stdout)
@@ -94,10 +107,18 @@ rt [OPTIONS]
 -h, --help           Show help
 ```
 
-Example with all implemented bonuses:
+Required-feature example:
 
 ```bash
 ./target/release/rt --scene 3 \
+  --reflect --refract --texture \
+  --out scene3.ppm
+```
+
+All bonus categories together:
+
+```bash
+./target/release/rt --scene 5 \
   --reflect --refract --texture \
   --out bonus.ppm
 ```
@@ -118,7 +139,9 @@ use crate::camera::Camera;
 use crate::light::Light;
 use crate::material::Material;
 use crate::scene::Scene;
-use crate::shapes::{Cube, Cylinder, Plane, Sphere};
+use crate::shapes::{
+    Cube, Cylinder, FluidSurface, ParticleCloud, Plane, Sphere,
+};
 use crate::vec3::{Color, Vec3};
 
 let camera = Camera::new(
@@ -250,7 +273,7 @@ scene.add_light(Light::new(
 ));
 ```
 
-The built-in scenes 1 and 2 use a soft camera-side fill light to keep the front-facing surfaces readable. Scene 2 still has lower brightness because its key light is `0.5` versus `1.2` in scene 1.
+Scenes 1 and 2 use a soft camera-side fill light to keep front-facing surfaces readable. Scene 2 still has lower brightness because its key light is `0.5` versus `1.2` in scene 1.
 
 Scale every light at runtime with:
 
@@ -293,16 +316,79 @@ Top-down views are safe:
 
 When the requested up vector is parallel to the view direction, `Camera::new` chooses a non-parallel fallback up vector. If `position == look_at`, it falls back to the conventional +Z camera axis instead of creating a zero-sized image plane.
 
+## Particles
+
+`ParticleCloud` is implemented in `src/shapes/particle.rs`. Internally it contains small spherical particles, but the renderer sees one `Hittable` object.
+
+Explicit cloud:
+
+```rust
+let centers = vec![
+    Vec3::new(-1.0, 1.0, 0.0),
+    Vec3::new(-0.8, 1.4, 0.1),
+    Vec3::new(-1.2, 1.8, -0.1),
+];
+
+scene.add(ParticleCloud::new(
+    centers,
+    0.07,
+    Material::new(Color::new(1.0, 0.45, 0.12)),
+));
+```
+
+Deterministic fountain helper:
+
+```rust
+scene.add(ParticleCloud::fountain(
+    Vec3::new(-2.0, 0.1, 0.0),
+    72,
+    Material::new(Color::new(1.0, 0.45, 0.12)),
+));
+```
+
+The fountain uses deterministic golden-angle placement, so repeated renders are stable and no random-number crate is required.
+
+## Fluids
+
+`FluidSurface` is implemented in `src/shapes/fluid.rs`. It models a finite wavy height field:
+
+```text
+y = base + amplitude * sin(f*x) * cos(f*z)
+```
+
+Create a water-like patch:
+
+```rust
+let water = Material::new(Color::new(0.08, 0.38, 0.82))
+    .diffuse(0.45)
+    .specular(0.9)
+    .shininess(120.0)
+    .reflectivity(0.3)
+    .transparency(0.35)
+    .ior(1.333);
+
+scene.add(FluidSurface::new(
+    Vec3::new(1.35, 0.48, 0.0), // center / base height
+    1.75,                       // half width in X
+    1.55,                       // half width in Z
+    0.18,                       // wave amplitude
+    2.7,                        // wave frequency
+    water,
+));
+```
+
+The implementation first restricts each ray to the fluid's finite bounding box, samples for a sign change of the implicit surface equation, refines the crossing with bisection, and computes the surface normal from the analytic gradient. With `--reflect --refract`, the water material also participates in recursive optical effects.
+
 ## Adding a custom scene preset
 
-The built-in presets live in `src/scenes.rs` and are selected by `scenes::build`.
+The built-in presets live in `src/scenes.rs` and are selected by `scenes::build`. Scenes 1-4 are required; scene 5 is the bonus showcase.
 
-To create scene 5:
+To create scene 6:
 
 1. copy an existing scene-builder function such as `scene_all_objects` and edit its objects, lights and camera;
-2. add a new match arm in `scenes::build`, for example `5 => scene_custom()`;
-3. update the `--scene` range check in `src/main.rs` so it accepts 5;
-4. update the help text from `<1|2|3|4>` to include 5;
+2. add a new match arm in `scenes::build`, for example `6 => scene_custom()`;
+3. update the `--scene` range check in `src/main.rs` so it accepts 6;
+4. update the help text from `<1|2|3|4|5>` to include 6;
 5. run `cargo fmt` and rebuild.
 
 If the goal is only to move the existing camera or change overall brightness, use CLI overrides instead of creating another preset.
@@ -332,6 +418,12 @@ cargo build --release
 
 Scenes 3 and 4 intentionally use the same object/light setup and differ only in the default camera position.
 
+The bonus scene is intentionally not committed as a fifth required image. Generate it locally when needed:
+
+```bash
+./target/release/rt --scene 5 --width 800 --height 600 --reflect --refract --texture --out bonus.ppm
+```
+
 ## PPM output
 
 `src/ppm.rs` writes the plain ASCII `P3` format:
@@ -347,23 +439,25 @@ The image body contains RGB integer samples in row-major order after gamma corre
 
 ## Bonus effects
 
+The official audit asks four bonus questions; all are implemented:
+
 ### Textures
 
-Enable with `--texture`. Procedural checker materials can be attached to any primitive.
+Enable with `--texture`. Procedural checker materials can be attached to any primitive. Scenes 3/4 visibly use a checker material on the cube as well as the ground.
 
-### Reflection
+### Reflection and refraction
 
-Enable with `--reflect`. Materials with `reflectivity > 0` cast a recursive reflected ray and blend the returned color with the local lighting result.
+Enable with `--reflect` and `--refract`. Reflective materials cast recursive mirror rays. Transparent materials use Snell's law and `ior`; total internal reflection is used when refraction is impossible.
 
-### Refraction
+Scenes 3/4 demonstrate a glass sphere. Scene 5 gives the fluid surface water-like reflection/refraction parameters.
 
-Enable with `--refract`. Transparent materials use Snell's law and `ior`. When refraction is impossible, the renderer uses total internal reflection.
+### Particles
 
-The glass sphere in scenes 3/4 demonstrates refraction.
+`ParticleCloud` provides a deterministic particle system. Scene 5 renders a 72-particle fountain.
 
-### Not implemented
+### Fluids
 
-Particles and fluids are not implemented.
+`FluidSurface` provides a finite procedural wavy surface with analytic normals. Scene 5 renders it as a water-like material.
 
 ## Project layout
 
@@ -376,9 +470,15 @@ src/
   material.rs   material properties and checker textures
   light.rs      point lights
   hittable.rs   Hittable trait and HitRecord
-  shapes/       sphere, cube, plane and cylinder intersections
+  shapes/
+    sphere.rs   sphere intersection
+    cube.rs     box/slab intersection
+    plane.rs    infinite plane intersection
+    cylinder.rs finite cylinder intersection
+    particle.rs particle-cloud bonus
+    fluid.rs    procedural fluid-surface bonus
   scene.rs      scene objects, lights, camera and closest-hit search
-  scenes.rs     four built-in audit scenes
+  scenes.rs     four required scenes + one bonus showcase scene
   renderer.rs   lighting, shadows, reflection and refraction
   ppm.rs        P3 PPM writer
 renders/        four required 800×600 images
